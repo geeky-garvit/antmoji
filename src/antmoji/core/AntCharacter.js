@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { normalizeConfig } from './catalog.js';
 import { createSkinMaterials, applySkin, createEyeMaterials, setEyeColor, createMouthMaterials } from './materials.js';
-import { HEAD, buildHead } from './head.js';
-import { buildBodyGeometry, buildLimbs } from './body.js';
+import { HEAD, headSpec } from './head.js';
+import { buildLimbs } from './body.js';
+import { getSculpt, loadSculpt } from './sculptCache.js';
 import { TaperedTube } from './geometry.js';
 import {
-  createAccessoryMaterials, buildHat, buildHair, buildEyewear, buildEarrings, buildNeckwear,
+  createAccessoryMaterials, buildHat, buildHair, buildEyewear, buildEarrings, buildNeckwear, sculptKeysFor,
 } from './accessories.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -68,14 +69,17 @@ export class AntCharacter {
 
     this._buildBody();
     this._buildHead();
-    this._applyAll(null);
+    this._committed = null;
+    this._ver = 0;
+    this.object.visible = false;
+    this._applyAll();
   }
 
   /* ── Construction ─────────────────────────────────────────────── */
   _buildBody() {
     this.rig = new THREE.Group();               // bobs / squashes for gestures
     this.object.add(this.rig);
-    this.body = new THREE.Mesh(buildBodyGeometry(), this.skin.vc);
+    this.body = new THREE.Mesh(undefined, this.skin.vc);
     this.body.castShadow = true;
     this.rig.add(this.body);
     this.limbs = buildLimbs(this.skin.plain);
@@ -97,12 +101,12 @@ export class AntCharacter {
 
     // Eyes
     this.eyes = [];
-    const scleraGeo = new THREE.SphereGeometry(HEAD.eyeR, 64, 40).rotateX(Math.PI / 2);
-    const corneaGeo = new THREE.SphereGeometry(HEAD.eyeR * 1.012, 48, 20, 0, Math.PI * 2, 0, 1.0).rotateX(Math.PI / 2);
+    const scleraGeo = new THREE.SphereGeometry(HEAD.eyeR, 96, 64).rotateX(Math.PI / 2);
+    const corneaGeo = new THREE.SphereGeometry(HEAD.eyeR * 1.012, 96, 32, 0, Math.PI * 2, 0, 1.0).rotateX(Math.PI / 2);
     const lidR = HEAD.eyeR * 1.045;
-    const upperGeo = new THREE.SphereGeometry(lidR, 48, 20, 0, Math.PI * 2, 0, Math.PI / 2);
-    const lowerGeo = new THREE.SphereGeometry(lidR, 48, 20, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-    const rimGeo = new THREE.TorusGeometry(lidR, 0.02, 12, 64).rotateX(Math.PI / 2);
+    const upperGeo = new THREE.SphereGeometry(lidR, 96, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+    const lowerGeo = new THREE.SphereGeometry(lidR, 96, 32, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    const rimGeo = new THREE.TorusGeometry(lidR, 0.026, 20, 128).rotateX(Math.PI / 2);
     const [ex, ey, ez] = HEAD.eye;
     for (const s of [-1, 1]) {
       const socket = new THREE.Group();
@@ -117,7 +121,7 @@ export class AntCharacter {
       // painted catchlights stay put while the eye rotates (cartoon convention)
       [[-0.36, 0.42, 0.055], [0.3, -0.3, 0.024]].forEach(([dx, dy, r]) => {
         const n = V(dx - s * 0.05, dy, 1).normalize();
-        const c = new THREE.Mesh(new THREE.CircleGeometry(r, 24), this.eyeMats.catchlight);
+        const c = new THREE.Mesh(new THREE.CircleGeometry(r, 40), this.eyeMats.catchlight);
         c.position.copy(n).multiplyScalar(HEAD.eyeR * 1.02);
         c.lookAt(n.clone().multiplyScalar(2));
         c.renderOrder = 3;
@@ -155,13 +159,13 @@ export class AntCharacter {
     this.antennaGroup.clear();
     this.antennae = [];
     const spec = antennaPath(style);
-    const N = 30;
+    const N = 44;
     for (const s of [-1, 1]) {
       const ctrl = spec.pts.map((p) => V(p.x * s, p.y, p.z));
       const rest = new THREE.CatmullRomCurve3(ctrl, false, 'centripetal').getPoints(N - 1);
       const r0 = spec.r;
-      const tube = new TaperedTube(N, 14, (t) => r0 * (1 - 0.38 * t), this.skin.plain);
-      const tipGeo = new THREE.SphereGeometry(spec.tip, 32, 20);
+      const tube = new TaperedTube(N, 22, (t) => r0 * (1 - 0.38 * t), this.skin.plain);
+      const tipGeo = new THREE.SphereGeometry(spec.tip, 48, 32);
       const tip = new THREE.Mesh(tipGeo, spec.glow ? this.tipGlow : this.skin.plain);
       if (spec.club) tip.scale.set(0.85, 1.25, 0.85);
       tip.castShadow = true;
@@ -180,11 +184,26 @@ export class AntCharacter {
   setConfig(next) {
     const prev = this.config;
     this.config = normalizeConfig({ ...prev, ...next });
-    this._applyAll(prev);
+    return this._applyAll();
   }
 
-  _applyAll(prev) {
+  /** Waits for any missing sculpts (meshed off-thread), then commits atomically. */
+  _applyAll() {
+    const missing = sculptKeysFor(this.config).filter((k) => !getSculpt(k));
+    if (!missing.length) { this._commit(); this.ready = Promise.resolve(); return this.ready; }
+    const v = ++this._ver;
+    this.ready = Promise.all(missing.map(loadSculpt)).then(() => {
+      if (v === this._ver) this._commit();
+      else return this.ready;
+    });
+    return this.ready;
+  }
+
+  _commit() {
+    const prev = this._committed;
     const c = this.config;
+    this._committed = { ...c };
+    if (!prev) { this.body.geometry = getSculpt('body'); this.object.visible = true; }
     const changed = (k) => !prev || prev[k] !== c[k];
     if (changed('skin') || changed('finish')) applySkin(this.skin, c.skin, c.finish);
     if (changed('eyeColor')) {
@@ -208,8 +227,8 @@ export class AntCharacter {
   }
 
   _rebuildHead() {
-    const { geometry, spec } = buildHead(this.config.mouth, this.config.mandible);
-    this.headMesh.geometry = geometry;
+    const spec = headSpec(this.config.mouth);
+    this.headMesh.geometry = getSculpt(`head|${this.config.mouth}|${this.config.mandible}`);
     this.mouthSlot.clear();
     const m = this.mouthMats;
     const add = (mat, c, r, rot) => {

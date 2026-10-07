@@ -4,7 +4,7 @@
  * mandibles are fused into one SDF and meshed as a single seamless surface.
  */
 import {
-  meshSDF, cachedMesh, sdEllipsoid, sdSphere, sdRoundCone, sdPolyline,
+  meshSDFData, sdEllipsoid, sdSphere, sdRoundCone, sdPolyline,
   smin, smax, smoothstep,
 } from './sdf.js';
 
@@ -106,12 +106,17 @@ function mandibleField(type) {
   return L;
 }
 
-/**
- * @returns {{ geometry, spec }} spec describes interior parts for the character to add.
- */
-export function buildHead(mouth = 'smile', mandible = 'none') {
-  return cachedMesh(`head|${mouth}|${mandible}`, () => {
-    const spec = mouthSpec(mouth);
+const _specs = new Map();
+/** Mouth interior description (cheap; computed on the main thread). */
+export function headSpec(mouth) {
+  if (!_specs.has(mouth)) _specs.set(mouth, mouthSpec(mouth));
+  return _specs.get(mouth);
+}
+
+/** Head sculpt as typed arrays (runs in a worker). */
+export function headSculpt(mouth = 'smile', mandible = 'none') {
+  {
+    const spec = headSpec(mouth);
     const mands = mandibleField(mandible);
     const [ex, ey, ez] = HEAD.eye;
     const [ax, ay, az] = HEAD.antennaBase;
@@ -166,12 +171,11 @@ export function buildHead(mouth = 'smile', mandible = 'none') {
       out[0] = out[1] = out[2] = ao * eo;
     };
 
-    const geometry = meshSDF(fn, {
+    return meshSDFData(fn, {
       min: [-0.96, -0.3, -0.82],
       max: [0.96, 1.46, 0.98],
-      cell: 0.018,
+      cell: 0.0125,
       color,
     });
-    return { geometry, spec };
-  });
+  }
 }

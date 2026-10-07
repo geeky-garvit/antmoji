@@ -36,10 +36,9 @@ export function renderAntmojiImage(config, { size = 256, framing = 'bust', backg
   if (urlCache.has(key)) return Promise.resolve(urlCache.get(key));
   const s = getShared();
   // Serialise renders; yield between them so the UI stays responsive.
-  const job = s.queue.then(() => new Promise((resolve) => {
+  const job = s.queue.then(() => s.ant.setConfig(cfg)).then(() => new Promise((resolve) => {
     const run = () => {
       const { renderer, scene, camera, ant } = s;
-      ant.setConfig(cfg);
       ant._pop = 0;
       ant.lookAt(0, 0);
       ant._look.yaw = 0; ant._look.pitch = 0;

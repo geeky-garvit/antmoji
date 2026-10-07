@@ -3,7 +3,7 @@
  * World space, ground at y = 0, character faces +Z.
  */
 import * as THREE from 'three';
-import { meshSDF, cachedMesh, sdEllipsoid, sdSphere, sdCapsule, smin, smoothstep } from './sdf.js';
+import { meshSDFData, sdEllipsoid, sdSphere, sdCapsule, smin, smoothstep } from './sdf.js';
 import { capsuleBetween } from './geometry.js';
 import { HEAD } from './head.js';
 
@@ -13,8 +13,8 @@ export const BODY = {
   gaster: [0, 1.3, -0.05, 0.56, 0.55, 0.52],
 };
 
-export function buildBodyGeometry() {
-  return cachedMesh('body', () => {
+export function bodySculpt() {
+  {
     const [tx, ty, tz, trx, try_, trz] = BODY.thorax;
     const [px, py, pz, prx, pry, prz] = BODY.petiole;
     const [gx, gy, gz, grx, gry, grz] = BODY.gaster;
@@ -38,8 +38,8 @@ export function buildBodyGeometry() {
       const v = waist * band(1.5) * band(1.18);
       out[0] = out[1] = out[2] = v;
     };
-    return meshSDF(fn, { min: [-0.72, 0.6, -0.68], max: [0.72, HEAD.pivotY + 0.3, 0.55], cell: 0.022, color });
-  });
+    return meshSDFData(fn, { min: [-0.72, 0.6, -0.68], max: [0.72, HEAD.pivotY + 0.3, 0.55], cell: 0.014, color });
+  }
 }
 
 /**
@@ -58,7 +58,7 @@ function buildLimb(points, radii, material, endFn) {
     const seg = capsuleBetween(new THREE.Vector3(), local, radii[i], radii[i + 1], material);
     parent.add(seg);
     // joint ball for that cartoon "ball-jointed" look
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(radii[i] * 1.18, 24, 16), material);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(radii[i] * 1.04, 40, 28), material);
     ball.castShadow = true;
     parent.add(ball);
     const child = new THREE.Group();
@@ -73,7 +73,7 @@ function buildLimb(points, radii, material, endFn) {
 
 function hand(material, side) {
   return (g) => {
-    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.07, 24, 16), material);
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.07, 40, 28), material);
     palm.scale.set(1, 1.1, 0.9);
     palm.castShadow = true;
     g.add(palm);
@@ -87,7 +87,7 @@ function hand(material, side) {
 
 function foot(material) {
   return (g) => {
-    const f = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), material);
+    const f = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), material);
     f.scale.set(0.11, 0.065, 0.18);
     f.position.set(0, -0.03, 0.06);
     f.castShadow = true;

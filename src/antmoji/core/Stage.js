@@ -96,7 +96,7 @@ export class AntmojiStage {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     configureRenderer(this.renderer);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
     const cv = this.renderer.domElement;
     cv.style.cssText = 'display:block;width:100%;height:100%;touch-action:pan-y;outline:none';
     container.appendChild(cv);

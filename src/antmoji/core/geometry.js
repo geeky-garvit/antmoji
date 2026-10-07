@@ -4,7 +4,7 @@ import * as THREE from 'three';
  * Tangent-continuous tapered capsule along +Y, base sphere (r1) at y=0 and
  * tip sphere (r2) at y=length. Built with a lathe so shading is perfectly smooth.
  */
-export function taperedCapsule(r1, r2, length, radial = 28, capSegs = 10) {
+export function taperedCapsule(r1, r2, length, radial = 40, capSegs = 14) {
   const beta = Math.asin(THREE.MathUtils.clamp((r2 - r1) / length, -1, 1));
   const pts = [];
   for (let i = 0; i <= capSegs; i++) {

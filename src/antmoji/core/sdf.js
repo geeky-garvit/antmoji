@@ -125,7 +125,12 @@ const EDGES = [
  *   color(x, y, z, out) may write linear RGB into out[0..2] per vertex.
  * @returns {THREE.BufferGeometry}
  */
-export function meshSDF(fn, { min, max, cell, color = null, iters = 4 }) {
+export function meshSDF(fn, opts) {
+  return geometryFromData(meshSDFData(fn, opts));
+}
+
+/** Same as meshSDF but returns plain typed arrays (transferable from a worker). */
+export function meshSDFData(fn, { min, max, cell, color = null, iters = 4 }) {
   const nx = Math.ceil((max[0] - min[0]) / cell) + 1;
   const ny = Math.ceil((max[1] - min[1]) / cell) + 1;
   const nz = Math.ceil((max[2] - min[2]) / cell) + 1;
@@ -269,13 +274,19 @@ export function meshSDF(fn, { min, max, cell, color = null, iters = 4 }) {
     }
   }
 
+  const index = count > 65535 ? new Uint32Array(idx) : new Uint16Array(idx);
+  return { position: P, normal: N, color: C, index };
+}
+
+export function geometryFromData({ position, normal, color, index }) {
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
-  if (C) geo.setAttribute('color', new THREE.BufferAttribute(C, 3));
-  geo.setIndex(count > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+  geo.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+  if (color) geo.setAttribute('color', new THREE.BufferAttribute(color, 3));
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
   geo.computeBoundingSphere();
   geo.computeBoundingBox();
+  geo.userData.shared = true;
   return geo;
 }
 
@@ -285,10 +296,3 @@ export function hexToLinear(hex) {
   return [c.r, c.g, c.b];
 }
 
-/** Cache helper so each sculpt is only meshed once per page. */
-const _cache = new Map();
-export function cachedMesh(key, build) {
-  let g = _cache.get(key);
-  if (!g) { g = build(); _cache.set(key, g); }
-  return g;
-}
