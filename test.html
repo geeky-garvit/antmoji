@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Antmoji test</title>
+<style>body{margin:0;background:#eef0f4;display:flex;gap:0;flex-wrap:wrap}#a{width:640px;height:720px}#imgs{display:flex;flex-wrap:wrap;width:640px}#imgs img{width:160px;height:160px}</style></head>
+<body><div id="a"></div><div id="imgs"></div>
+<script type="module">
+import { AntmojiStage } from '/src/antmoji/core/Stage.js';
+import { renderAntmojiImage } from '/src/antmoji/core/snapshot.js';
+import { PRESETS, parseConfig } from '/src/antmoji/core/catalog.js';
+const q = new URLSearchParams(location.search);
+const cfg = q.get('c') ? JSON.parse(q.get('c')) : {};
+const t0 = performance.now();
+const st = new AntmojiStage(document.getElementById('a'), { config: cfg, framing: q.get('f') || 'full', follow: 'none', idleGesture: false });
+st.ant.lookAt(0, 0);
+if (q.get('yaw')) st._yaw = +q.get('yaw');
+console.log('stage ms', performance.now() - t0);
+if (q.get('presets')) {
+  for (const p of PRESETS) {
+    const t = performance.now();
+    const u = await renderAntmojiImage(p.config, { size: 320, framing: q.get('pf') || 'bust' });
+    console.log(p.name, performance.now() - t);
+    const im = new Image(); im.src = u; document.getElementById('imgs').appendChild(im);
+  }
+}
+setTimeout(() => { document.title = 'READY'; }, 1500);
+</script></body></html>
